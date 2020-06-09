@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %} Test {% endblock title %}
+
+{% block body %}
+
+<div id="app">
+    [[username]]
+    <input type="text" placeholder="Username" v-model="username"/>
+    <input type="password" placeholder="Password" v-model="password"/>
+    <button v-on:click="login">
+        Login
+    </button>
+</div>
+
+<script>
+    axios.defaults.xsrfCookieName = 'csrftoken'
+    axios.defaults.xsrfHeaderName = "X-CSRFTOKEN"
+    var app = new Vue({
+        el: '#app',
+        delimiters: ['[[', ']]'],
+        data: {
+            username: '',
+            password: ''
+        },
+        methods: {
+            login() {
+                const payload = {
+                    username: this.username,
+                    password: this.password
+                };
+                console.log({payload})
+                axios.post('http://localhost:8000/auth/', payload).then(resp => {
+                    location.reload()
+                })
+            }
+        }
+    })
+</script>
+
+{% endblock body %}

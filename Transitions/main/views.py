@@ -12,10 +12,11 @@ from rest_framework.permissions import AllowAny
 import smtplib
 from organizations.backends import invitation_backend
 from organizations.models import Organization
+from django.contrib.auth import authenticate, login
 
 
 class MainView(TemplateView):
-    template_name = 'base.html'
+    template_name = 'login.html'
 
     def get(self, request):
         if request.user.is_authenticated and request.user.is_superuser:
@@ -33,6 +34,21 @@ class MainView(TemplateView):
 class TestView(TemplateView):
     def get(self, request):
         return JsonResponse({'message': 'Hello from the other side'})
+
+
+class LoginView(viewsets.ViewSet):
+
+    permission_classes = (AllowAny, )
+
+    def create(self, request):
+        username = request.data['username']
+        password = request.data['password']
+        user = authenticate(request, username=username, password=password)
+        if user is not None:
+            login(request, user)
+            return Response({'message': 'Ok'}, status=status.HTTP_200_OK)
+        else:
+            return Response({'message': 'unauthorize'}, status=status.HTTP_401_UNAUTHORIZED)
 
 
 class UserViewSet(viewsets.ModelViewSet):
