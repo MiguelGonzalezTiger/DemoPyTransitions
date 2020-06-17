@@ -12,15 +12,16 @@ from rest_framework.permissions import AllowAny
 import smtplib
 from organizations.backends import invitation_backend
 from organizations.models import Organization
-from django.contrib.auth import authenticate, login
-
+from rest_framework.decorators import MethodMapper
+import logging
+logger = logging.getLogger()
 
 class MainView(TemplateView):
     template_name = 'login.html'
 
     def get(self, request):
         if request.user.is_authenticated and request.user.is_superuser:
-            return render(request, 'admin.html')
+            return render(request, 'base.html')
 
         if request.user.is_authenticated and not request.user.is_superuser:
             return render(request, 'user.html')
@@ -31,43 +32,63 @@ class MainView(TemplateView):
         return render(request, 'base.html')
 
 
-class TestView(TemplateView):
-    def get(self, request):
-        return JsonResponse({'message': 'Hello from the other side'})
+class DispatcherMixin(viewsets.ModelViewSet):
+
+    def get_action_and_context_from_request(self, request):
+
+        context = request.data['context']
+        action = request.data['action']
+        
+        return action, context
+
+    def dispatch_action(self, request, pk=None, *args, **kwargs):
+
+        # TODO: Log enter and exit from this method
+        # TODO: Validate this action is for 'patch' method
+        
+        action, context = self.get_action_and_context_from_request(request)
+
+        # TODO: Check context is syntactically valid for action
+
+        model_class = self.serializer_class.Meta.model
+        
+        # TODO: Enter and exit from dispatcher
+        success, message = model_class.dispatcher(context, action, pk)
+        
+        if not success:
+            return Response({'message': message}, status=status.HTTP_400_BAD_REQUEST )
+
+        return Response({'message': message}, status=status.HTTP_200_OK)
+
+    # POST method is handle by the create method
+    def create(self, request, *args, **kwargs):
+        return self.dispatch_action(request, *args, **kwargs)
+
+    # PUT method is handle by the eupdate method
+    def update(self, request, pk, *args, **kwargs):
+        return self.dispatch_action(request, pk, *args, **kwargs)
+
+    # PATCH method is handle by the partial_update method
+    def partial_update(self, request, pk, *args, **kwargs):
+        return self.dispatch_action(request, pk, *args, **kwargs)
+
+    # DELETE method is handle by the delete method
+    def delete(self, request, pk, *args, **kwargs):
+        return self.dispatch_action(request, pk, *args, **kwargs)
 
 
-class LoginView(viewsets.ViewSet):
-
-    permission_classes = (AllowAny, )
-
-    def create(self, request):
-        username = request.data['username']
-        password = request.data['password']
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
-            return Response({'message': 'Ok'}, status=status.HTTP_200_OK)
-        else:
-            return Response({'message': 'unauthorize'}, status=status.HTTP_401_UNAUTHORIZED)
-
-
-class UserViewSet(viewsets.ModelViewSet):
+class UserViewSet(DispatcherMixin):
     """
     API endpoint that allows users to be viewed or edited.
     """
     queryset = User.objects.exclude(user_state='archived')
-
     serializer_class = UserSerializer
-
     permission_classes = (AllowAny, )
+    model_pk = 'users_pk'
 
     def __init__(self, *args, **kwargs):
         super(UserViewSet, self).__init__(*args, **kwargs)
-        self.patch_actions = {
-            'pre_auth': self.pre_auth,
-            'auth': self.auth,
-        }
-
+        
     def get_queryset(self):
         queryset = User.objects.exclude(user_state='archived')
 
@@ -76,37 +97,3 @@ class UserViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(user_state='pre-authenticated')
         return queryset
 
-    def create(self, request, *args, **kwargs):
-        user = invitation_backend().invite_by_email(
-                    request.data['email'],
-                    **{'domain': {'domain': 'localhost:8000'},
-                        'organization': Organization.objects.last()})
-        return Response({'message': 'Ok'}, status=status.HTTP_200_OK)
-
-    def patch(self, request, *args, **kwargs):
-        return self.patch_actions[request.data['action']](request)
-
-    def delete(self, request, *args, **kwargs):
-        user_data = request.data
-        user = User.objects.get(email=user_data['email'])
-        user.archive_user(user.machine)
-        user.save()
-        return Response({'message': 'User deleted'}, status=status.HTTP_200_OK)
-
-    def pre_auth(self, request):
-        user_data = request.data['context']
-        if user_data['password'] != user_data['confirm_password']:
-            return Response({'message': 'Pre-auth'}, status=status.HTTP_409_CONFLICT)
-        user = User.objects.get(email=user_data['email'])
-        user.username = user_data['username']
-        user.password = user_data['username']
-        user.first_sign_in(user.machine)
-        user.save()
-        return Response({'message': 'Pre-auth'}, status=status.HTTP_200_OK)
-
-    def auth(self, request):
-        user_data = request.data['context']
-        user = User.objects.get(email=user_data['email'])
-        user.authentication_success(user.machine)
-        user.save()
-        return Response({'message': 'user is authenticated'}, status=status.HTTP_200_OK)
