@@ -38,10 +38,10 @@
             methods: {
                 makePost(){
                     console.log('sending patch')
-                    axios.patch(
-                        'http://localhost:8000/users/1/',
+                    axios.post(
+                        'http://localhost:8000/users/',
                         {
-                            action: 'pre_auth',
+                            action: 'invite_user_task',
                             context: {
                                 username: 'miguelito',
                                 email: this.email,

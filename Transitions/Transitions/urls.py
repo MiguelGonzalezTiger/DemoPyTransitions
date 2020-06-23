@@ -11,7 +11,7 @@ router.register(r'users', UserViewSet)
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include(router.urls)),
-    path('auth/', LoginView.as_view({'post': 'create'})),
+    # path('auth/', LoginView.as_view({'post': 'create'})),
     path("", MainView.as_view(), name='main'),
     path(r'^accounts/', include('organizations.urls')),
     path(r'^invitations/', include(invitation_backend().get_urls())),
